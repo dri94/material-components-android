@@ -216,7 +216,6 @@ public class TextInputLayout extends LinearLayout {
   private final int boxStrokeWidthFocusedPx;
   @ColorInt private int boxStrokeColor;
   @ColorInt private int boxBackgroundColor;
-  private int gravity;
 
   /**
    * Values for box background mode. There is either a filled background, an outline background, or
@@ -2753,9 +2752,9 @@ public class TextInputLayout extends LinearLayout {
       // Store the user defined end compound drawable so that we can restore it later.
       if (compounds[2] != endIconDummyDrawable) {
         originalEditTextEndDrawable = compounds[2];
-        TextViewCompat.setCompoundDrawablesRelative(
-            editText, compounds[0], compounds[1], endIconDummyDrawable, compounds[3]);
       }
+      TextViewCompat.setCompoundDrawablesRelative(
+          editText, compounds[0], compounds[1], endIconDummyDrawable, compounds[3]);
     } else if (endIconDummyDrawable != null) {
       // Remove the dummy end compound drawable if it exists and clear it.
       final Drawable[] compounds = TextViewCompat.getCompoundDrawablesRelative(editText);
@@ -2896,52 +2895,14 @@ public class TextInputLayout extends LinearLayout {
     applyCutoutPadding(cutoutBounds);
     // Offset the cutout bounds by the TextInputLayout's left padding to ensure that the cutout is
     // inset relative to the TextInputLayout's bounds.
-
-    if (isRightCutout()) {
-      cutoutBounds.offset(calculateRightOffset(cutoutBounds), 0);
-    } else if (isCenterCutout()) {
-      cutoutBounds.offset(calculateCenterOffset(cutoutBounds), 0);
-    } else {
-      cutoutBounds.offset(- getPaddingLeft(), 0);
-    }
+    cutoutBounds.offset(-getPaddingLeft(), 0);
     ((CutoutDrawable) boxBackground).setCutout(cutoutBounds);
-  }
-
-  private boolean isRightCutout() {
-    int layoutDirection = ViewCompat.getLayoutDirection(this);
-    int horizontalGravity = gravity & Gravity.HORIZONTAL_GRAVITY_MASK;
-    return (layoutDirection == ViewCompat.LAYOUT_DIRECTION_RTL && gravity == Gravity.START)
-        || (layoutDirection == ViewCompat.LAYOUT_DIRECTION_LTR && gravity == Gravity.END)
-        || horizontalGravity == Gravity.RIGHT;
-  }
-
-  private boolean isCenterCutout() {
-    int horizontalGravity = gravity & Gravity.HORIZONTAL_GRAVITY_MASK;
-    return horizontalGravity == Gravity.CENTER_HORIZONTAL;
-  }
-
-  private float calculateRightOffset(RectF cutoutBounds) {
-    int rightPadding = getPaddingRight() + editText.getTotalPaddingRight();
-    int boxWidth = boxBackground.getBounds().right;
-    return boxWidth - rightPadding - cutoutBounds.width() - boxLabelCutoutPaddingPx;
-  }
-
-  private float calculateCenterOffset(RectF cutoutBounds) {
-    int centerPadding = getPaddingLeft() + editText.getTotalPaddingLeft();
-    int centerValue = boxBackground.getBounds().centerX();
-    return centerValue - centerPadding - (cutoutBounds.width() / 2) + boxLabelCutoutPaddingPx;
   }
 
   private void closeCutout() {
     if (cutoutEnabled()) {
       ((CutoutDrawable) boxBackground).removeCutout();
     }
-  }
-
-  @Override
-  public void setGravity(int gravity) {
-    super.setGravity(gravity);
-    this.gravity = gravity;
   }
 
   private void applyCutoutPadding(RectF cutoutBounds) {
