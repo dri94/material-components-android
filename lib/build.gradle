@@ -18,10 +18,13 @@ dependencies {
   api compatibility("vectordrawable")
   api compatibility("viewpager2")
 
+  api compatibility("lifecycleRuntime")
+  annotationProcessor compatibility("lifecycleCompiler")
+
   testImplementation "androidx.test:core:${project.rootProject.ext.testRunnerVersion}"
   testImplementation "androidx.test:runner:${project.rootProject.ext.testRunnerVersion}"
   testImplementation "junit:junit:4.12"
-  testImplementation "com.google.truth:truth:0.35"
+  testImplementation "com.google.truth:truth:0.45"
   testImplementation "org.mockito:mockito-core:1.9.5"
   testImplementation "org.robolectric:robolectric:4.3-alpha-2"
 
@@ -89,7 +92,7 @@ android {
   testOptions.unitTests.includeAndroidResources = true
 
   buildTypes.all {
-    consumerProguardFiles 'proguard-behaviors.pro', 'proguard-inflater.pro'
+    consumerProguardFiles 'proguard-behaviors.pro', 'proguard-inflater.pro', 'proguard-recyclerview.pro'
   }
 }
 

@@ -16,10 +16,13 @@
 package com.google.android.material.picker;
 
 import android.graphics.Canvas;
+import android.os.Bundle;
 import android.os.Parcelable;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RestrictTo;
 import androidx.annotation.RestrictTo.Scope;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
@@ -36,6 +39,7 @@ import java.util.Calendar;
  * @param <S> The type of item available when cells are selected in the {@link AdapterView}
  * @hide
  */
+// TODO: Refactor into client-facing selection mode API
 @RestrictTo(Scope.LIBRARY_GROUP)
 public interface GridSelector<S> extends Parcelable {
 
@@ -50,17 +54,26 @@ public interface GridSelector<S> extends Parcelable {
    */
   void select(Calendar selection);
 
+  /** Adds a listener for selection changes. */
+  boolean addOnSelectionChangedListener(OnSelectionChangedListener<S> listener);
+
+  /** Removes a listener for selection changes. */
+  boolean removeOnSelectionChangedListener(OnSelectionChangedListener<S> listener);
+
+  /** Removes all listeners for selection changes. */
+  void clearOnSelectionChangedListeners();
+
   /**
    * Modifies the provided {@link TextView} to indicate its selection status.
    *
    * <p>Called for each {@link TextView} as part of {@link MonthAdapter#getView(int, View,
    * ViewGroup)}
    *
-   * @param cell The {@link TextView} returned from {@link MonthAdapter#getView(int, View,
+   * @param view The {@link TextView} returned from {@link MonthAdapter#getView(int, View,
    *     ViewGroup)}
-   * @param item The {@link Calendar} returned from {@link MonthAdapter#getItem(int)}.
+   * @param content The {@link Calendar} returned from {@link MonthAdapter#getItem(int)}.
    */
-  void drawCell(TextView cell, Calendar item);
+  void drawItem(TextView view, Calendar content);
 
   /**
    * Called after {@link
@@ -68,4 +81,9 @@ public interface GridSelector<S> extends Parcelable {
    * each month so selectors can draw on the canvas.
    */
   void onCalendarMonthDraw(Canvas canvas, MaterialCalendarGridView gridView);
+
+  View onCreateTextInputView(
+      @NonNull LayoutInflater layoutInflater,
+      @Nullable ViewGroup viewGroup,
+      @Nullable Bundle bundle);
 }

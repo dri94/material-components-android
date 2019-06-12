@@ -99,9 +99,9 @@ class MonthAdapter extends BaseAdapter {
       day.setTag(month);
       day.setVisibility(View.VISIBLE);
     }
-    Calendar item = getItem(position);
-    if (item != null) {
-      gridSelector.drawCell(day, item);
+    Calendar content = getItem(position);
+    if (content != null) {
+      gridSelector.drawItem(day, content);
     }
     return day;
   }
@@ -148,5 +148,21 @@ class MonthAdapter extends BaseAdapter {
   /** True when a provided adapter position is within the calendar month */
   boolean withinMonth(int position) {
     return position >= firstPositionInMonth() && position <= lastPositionInMonth();
+  }
+
+  /**
+   * True when the provided adapter position is the smallest position for a value of {@link
+   * MonthAdapter#getItemId(int)}.
+   */
+  boolean isFirstInRow(int position) {
+    return position % month.daysInWeek == 0;
+  }
+
+  /**
+   * True when the provided adapter position is the largest position for a value of {@link
+   * MonthAdapter#getItemId(int)}.
+   */
+  boolean isLastInRow(int position) {
+    return (position + 1) % month.daysInWeek == 0;
   }
 }

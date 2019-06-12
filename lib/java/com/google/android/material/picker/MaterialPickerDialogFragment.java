@@ -21,6 +21,8 @@ import com.google.android.material.R;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.StateListDrawable;
 import android.os.Bundle;
 import androidx.annotation.AttrRes;
 import androidx.annotation.NonNull;
@@ -31,17 +33,18 @@ import androidx.annotation.StringRes;
 import androidx.annotation.StyleRes;
 import androidx.annotation.VisibleForTesting;
 import com.google.android.material.button.MaterialButton;
-import com.google.android.material.picker.MaterialCalendar.OnSelectionChangedListener;
+import com.google.android.material.internal.CheckableImageButton;
 import com.google.android.material.resources.MaterialAttributes;
 import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.FragmentTransaction;
+import androidx.appcompat.content.res.AppCompatResources;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.widget.TextView;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
-import java.util.Locale;
 
 /**
  * A {@link Dialog} with a header, {@link MaterialCalendar}, and set of actions.
@@ -82,6 +85,10 @@ public abstract class MaterialPickerDialogFragment<S> extends DialogFragment {
   @RestrictTo(Scope.LIBRARY_GROUP)
   public static final Object CANCEL_BUTTON_TAG = "CANCEL_BUTTON_TAG";
 
+  @VisibleForTesting
+  @RestrictTo(Scope.LIBRARY_GROUP)
+  public static final Object TOGGLE_BUTTON_TAG = "TOGGLE_BUTTON_TAG";
+
   /**
    * Returns the text to display at the top of the {@link DialogFragment}
    *
@@ -100,16 +107,16 @@ public abstract class MaterialPickerDialogFragment<S> extends DialogFragment {
    */
   protected abstract GridSelector<S> createGridSelector();
 
-  private SimpleDateFormat simpleDateFormat;
+  private SimpleDateFormat userDefinedSimpleDateFormat;
 
   @AttrRes private int themeResId;
   private GridSelector<S> gridSelector;
+  private PickerFragment<S> pickerFragment;
   private CalendarBounds calendarBounds;
   @StringRes private int titleTextResId;
 
-  private MaterialCalendar<S> materialCalendar;
   private TextView header;
-  private S selection;
+  private CheckableImageButton headerToggleButton;
 
   /**
    * Adds the super class required arguments to the Bundle.
@@ -151,9 +158,6 @@ public abstract class MaterialPickerDialogFragment<S> extends DialogFragment {
   @Override
   public final void onCreate(@Nullable Bundle bundle) {
     super.onCreate(bundle);
-    simpleDateFormat =
-        new SimpleDateFormat(
-            getResources().getString(R.string.mtrl_picker_date_format), Locale.getDefault());
     Bundle activeBundle = bundle == null ? getArguments() : bundle;
     themeResId =
         getThemeResource(
@@ -165,7 +169,6 @@ public abstract class MaterialPickerDialogFragment<S> extends DialogFragment {
     if (gridSelector == null) {
       gridSelector = createGridSelector();
     }
-    materialCalendar = MaterialCalendar.newInstance(gridSelector, themeResId, calendarBounds);
   }
 
   @Override
@@ -180,8 +183,12 @@ public abstract class MaterialPickerDialogFragment<S> extends DialogFragment {
       @Nullable ViewGroup viewGroup,
       @Nullable Bundle bundle) {
     View root = layoutInflater.inflate(R.layout.mtrl_picker_dialog, viewGroup);
+    Context context = root.getContext();
     header = root.findViewById(R.id.mtrl_picker_header_text);
+    headerToggleButton = root.findViewById(R.id.mtrl_picker_header_toggle);
     ((TextView) root.findViewById(R.id.mtrl_picker_title_text)).setText(titleTextResId);
+
+    initHeaderToggle(context);
 
     MaterialButton confirmButton = root.findViewById(R.id.confirm_button);
     confirmButton.setTag(CONFIRM_BUTTON_TAG);
@@ -189,7 +196,6 @@ public abstract class MaterialPickerDialogFragment<S> extends DialogFragment {
         new View.OnClickListener() {
           @Override
           public void onClick(View v) {
-            selection = materialCalendar.getSelection();
             dismiss();
           }
         });
@@ -200,7 +206,6 @@ public abstract class MaterialPickerDialogFragment<S> extends DialogFragment {
         new View.OnClickListener() {
           @Override
           public void onClick(View v) {
-            selection = null;
             dismiss();
           }
         });
@@ -208,29 +213,14 @@ public abstract class MaterialPickerDialogFragment<S> extends DialogFragment {
   }
 
   @Override
-  public void onViewCreated(@NonNull View view, @Nullable Bundle bundle) {
-    super.onViewCreated(view, bundle);
-    FragmentTransaction fragmentTransaction = getChildFragmentManager().beginTransaction();
-    fragmentTransaction.replace(R.id.mtrl_calendar_frame, materialCalendar);
-    fragmentTransaction.commit();
-  }
-
-  @Override
   public void onStart() {
     super.onStart();
-    updateHeader(materialCalendar.getSelection());
-    materialCalendar.addOnSelectionChangedListener(
-        new OnSelectionChangedListener<S>() {
-          @Override
-          public void onSelectionChanged(S selection) {
-            updateHeader(selection);
-          }
-        });
+    startPickerFragment();
   }
 
   @Override
   public void onStop() {
-    materialCalendar.clearOnSelectionChangedListeners();
+    pickerFragment.getGridSelector().clearOnSelectionChangedListeners();
     super.onStop();
   }
 
@@ -249,35 +239,71 @@ public abstract class MaterialPickerDialogFragment<S> extends DialogFragment {
    */
   @Nullable
   public final S getSelection() {
-    return selection;
+    return gridSelector.getSelection();
   }
 
   /**
-   * Sets a date formatter.
+   * Sets a user-defined date formatter.
    *
    * <p>Useful when the default localized date format is inadequate
    */
-  public final void setSimpleDateFormat(SimpleDateFormat simpleDateFormat) {
-    this.simpleDateFormat = simpleDateFormat;
+  public final void setSimpleDateFormat(@Nullable SimpleDateFormat simpleDateFormat) {
+    userDefinedSimpleDateFormat = simpleDateFormat;
   }
 
-  /** Returns a localized date formatter */
-  public final SimpleDateFormat getSimpleDateFormat() {
-    return simpleDateFormat;
-  }
-
-  /**
-   * Returns the {@link MaterialCalendar} based on a previous call to {@link
-   * MaterialPickerDialogFragment#createGridSelector()}
-   *
-   * <p>Returns null until after {@link DialogFragment#onCreate}
-   */
+  /** Returns the user-defined date formatter. */
   @Nullable
-  public final MaterialCalendar<? extends S> getMaterialCalendar() {
-    return materialCalendar;
+  public final SimpleDateFormat getSimpleDateFormat() {
+    return userDefinedSimpleDateFormat;
   }
 
   private void updateHeader(S selection) {
     header.setText(getHeaderText(selection));
+  }
+
+  private void startPickerFragment() {
+    pickerFragment =
+        headerToggleButton.isChecked()
+            ? MaterialTextInputPicker.newInstance(gridSelector, calendarBounds)
+            : MaterialCalendar.newInstance(gridSelector, themeResId, calendarBounds);
+    updateHeader(gridSelector.getSelection());
+
+    FragmentTransaction fragmentTransaction = getChildFragmentManager().beginTransaction();
+    fragmentTransaction.replace(R.id.mtrl_calendar_frame, pickerFragment);
+    fragmentTransaction.commitNow();
+
+    pickerFragment
+        .getGridSelector()
+        .addOnSelectionChangedListener(
+            new OnSelectionChangedListener<S>() {
+              @Override
+              public void onSelectionChanged(S selection) {
+                updateHeader(selection);
+              }
+            });
+  }
+
+  private void initHeaderToggle(Context context) {
+    headerToggleButton.setTag(TOGGLE_BUTTON_TAG);
+    headerToggleButton.setImageDrawable(createHeaderToggleDrawable(context));
+    headerToggleButton.setOnClickListener(
+        new OnClickListener() {
+          @Override
+          public void onClick(View v) {
+            headerToggleButton.toggle();
+            startPickerFragment();
+          }
+        });
+  }
+
+  // Create StateListDrawable programmatically for pre-lollipop support
+  private static Drawable createHeaderToggleDrawable(Context context) {
+    StateListDrawable toggleDrawable = new StateListDrawable();
+    toggleDrawable.addState(
+        new int[] {android.R.attr.state_checked},
+        AppCompatResources.getDrawable(context, R.drawable.ic_calendar_black_24dp));
+    toggleDrawable.addState(
+        new int[] {}, AppCompatResources.getDrawable(context, R.drawable.ic_edit_black_24dp));
+    return toggleDrawable;
   }
 }

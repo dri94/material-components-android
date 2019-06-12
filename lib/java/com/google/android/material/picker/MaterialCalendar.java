@@ -26,7 +26,6 @@ import androidx.annotation.RestrictTo;
 import androidx.annotation.RestrictTo.Scope;
 import androidx.annotation.VisibleForTesting;
 import com.google.android.material.button.MaterialButton;
-import androidx.fragment.app.Fragment;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -34,10 +33,10 @@ import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.widget.GridView;
 import android.widget.LinearLayout.LayoutParams;
-import androidx.viewpager.widget.ViewPager;
-import androidx.viewpager.widget.ViewPager.SimpleOnPageChangeListener;
+import android.widget.TextView;
+import androidx.viewpager2.widget.ViewPager2;
+import androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback;
 import java.util.Calendar;
-import java.util.LinkedHashSet;
 
 /**
  * Fragment for a days of week {@link Calendar} represented as a header row of days labels and
@@ -46,7 +45,7 @@ import java.util.LinkedHashSet;
  * @hide
  */
 @RestrictTo(Scope.LIBRARY_GROUP)
-public final class MaterialCalendar<S> extends Fragment {
+public final class MaterialCalendar<S> extends PickerFragment<S> {
 
   private static final String THEME_RES_ID_KEY = "THEME_RES_ID_KEY";
   private static final String GRID_SELECTOR_KEY = "GRID_SELECTOR_KEY";
@@ -56,21 +55,18 @@ public final class MaterialCalendar<S> extends Fragment {
   @RestrictTo(Scope.LIBRARY_GROUP)
   public static final Object VIEW_PAGER_TAG = "VIEW_PAGER_TAG";
 
-  private final LinkedHashSet<OnSelectionChangedListener<S>> onSelectionChangedListeners =
-      new LinkedHashSet<>();
-
   private int themeResId;
   private GridSelector<S> gridSelector;
   private CalendarBounds calendarBounds;
   private MonthsPagerAdapter monthsPagerAdapter;
 
   /**
-   * Creates a {@link MaterialCalendar} with {@link GridSelector#drawCell(View, Calendar)} applied
-   * to each cell.
+   * Creates a {@link MaterialCalendar} with {@link GridSelector#drawItem(TextView, Calendar)}
+   * applied to each cell.
    *
    * @param gridSelector Controls the highlight state of the {@link MaterialCalendar}
-   * @param <T> Type returned from selections in this {@link MaterialCalendar} by {@link
-   *     MaterialCalendar#getSelection()}
+   * @param <T> Type of {@link GridSelector} returned from selections in this {@link
+   *     MaterialCalendar} by {@link MaterialCalendar#getGridSelector()}
    */
   public static <T> MaterialCalendar<T> newInstance(
       GridSelector<T> gridSelector, int themeResId, CalendarBounds calendarBounds) {
@@ -118,7 +114,8 @@ public final class MaterialCalendar<S> extends Fragment {
     daysHeader.setAdapter(new DaysOfWeekAdapter());
     daysHeader.setNumColumns(earliestMonth.daysInWeek);
 
-    ViewPager monthsPager = root.findViewById(R.id.month_pager);
+    ViewPager2 monthsPager = root.findViewById(R.id.month_pager);
+    monthsPager.setOffscreenPageLimit(1);
     monthsPager.setTag(VIEW_PAGER_TAG);
     int verticalDaySpacing =
         getResources().getDimensionPixelSize(R.dimen.mtrl_calendar_day_spacing_vertical);
@@ -130,6 +127,7 @@ public final class MaterialCalendar<S> extends Fragment {
     monthsPagerAdapter =
         new MonthsPagerAdapter(
             getChildFragmentManager(),
+            getLifecycle(),
             gridSelector,
             earliestMonth,
             latestMonth,
@@ -140,36 +138,18 @@ public final class MaterialCalendar<S> extends Fragment {
               public void onDayClick(Calendar day) {
                 gridSelector.select(day);
                 monthsPagerAdapter.notifyDataSetChanged();
-                for (OnSelectionChangedListener<S> listener : onSelectionChangedListeners) {
-                  listener.onSelectionChanged(gridSelector.getSelection());
-                }
               }
             });
     monthsPager.setAdapter(monthsPagerAdapter);
-    monthsPager.setCurrentItem(monthsPagerAdapter.getStartPosition());
-    addMonthChangeListeners(root);
+    monthsPager.setCurrentItem(monthsPagerAdapter.getStartPosition(), false);
+
+    addMonthChangeListeners(root, monthsPagerAdapter);
     return root;
   }
 
-  public final S getSelection() {
-    return gridSelector.getSelection();
-  }
-
-  boolean addOnSelectionChangedListener(OnSelectionChangedListener<S> listener) {
-    return onSelectionChangedListeners.add(listener);
-  }
-
-  boolean removeOnSelectionChangedListener(OnSelectionChangedListener<S> listener) {
-    return onSelectionChangedListeners.remove(listener);
-  }
-
-  void clearOnSelectionChangedListeners() {
-    onSelectionChangedListeners.clear();
-  }
-
-  interface OnSelectionChangedListener<S> {
-
-    void onSelectionChanged(S selection);
+  @Override
+  public GridSelector<S> getGridSelector() {
+    return gridSelector;
   }
 
   interface OnDayClickListener {
@@ -183,16 +163,18 @@ public final class MaterialCalendar<S> extends Fragment {
     return (int) context.getResources().getDimension(R.dimen.mtrl_calendar_day_size);
   }
 
-  private void addMonthChangeListeners(View root) {
-    final ViewPager monthPager = root.findViewById(R.id.month_pager);
+  private void addMonthChangeListeners(
+      final View root, final MonthsPagerAdapter monthsPagerAdapter) {
+    final ViewPager2 monthPager = root.findViewById(R.id.month_pager);
     final MaterialButton monthDropSelect = root.findViewById(R.id.month_drop_select);
-    monthDropSelect.setText(monthPager.getAdapter().getPageTitle(monthPager.getCurrentItem()));
+    monthDropSelect.setText(monthsPagerAdapter.getPageTitle(monthPager.getCurrentItem()));
     final MaterialButton monthPrev = root.findViewById(R.id.month_previous);
     final MaterialButton monthNext = root.findViewById(R.id.month_next);
-    monthPager.addOnPageChangeListener(
-        new SimpleOnPageChangeListener() {
+    monthPager.registerOnPageChangeCallback(
+        new OnPageChangeCallback() {
           @Override
           public void onPageSelected(int position) {
+            super.onPageSelected(position);
             calendarBounds =
                 CalendarBounds.create(
                     calendarBounds.getStart(),
@@ -206,7 +188,7 @@ public final class MaterialCalendar<S> extends Fragment {
         new OnClickListener() {
           @Override
           public void onClick(View view) {
-            if (monthPager.getCurrentItem() + 1 < monthPager.getAdapter().getCount()) {
+            if (monthPager.getCurrentItem() + 1 < monthPager.getAdapter().getItemCount()) {
               monthPager.setCurrentItem(monthPager.getCurrentItem() + 1);
             }
           }
